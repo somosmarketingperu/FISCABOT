@@ -1,0 +1,142 @@
+Guia "Para Dummies" del Linter de bot-whatsapp
+
+Tus Herramientas de Chef (Funciones del Bot):
+
+1. addKeyword (¡Escucha la Palabra Secreta!):
+   ¿Qué hace? Es como cuando el chef solo empieza a cocinar algo si escucha la "palabra secreta" de un plato específico (por ejemplo, "¡Hamburguesa!" o "¡Pizza!"). Si no la escucha, ¡no cocina nada!
+   Cuándo usarlo: Para definir qué palabras o frases (keywords) el bot debe "escuchar" del usuario para INICIAR un flujo de conversación o REDIRIGIRSE a un flujo existente. Si el usuario dice una de esas palabras, el flujo se activa.
+   Regla secreta:
+     Puedes poner varias palabras clave en una lista (por ejemplo, ['hola', 'buenas', 'inicio']).
+     { sensitive: false } significa que el chef no le importa si es "Hola", "hola" o "HOLA"; entenderá lo mismo. Si fuera true, "Hola" sería diferente de "hola".
+     Normalmente, un addKeyword es el PRIMER paso de un flujo.
+
+2. addAnswer (¡Habla y Espera Respuesta!):
+   ¿Qué hace? Es como cuando el chef grita "¡Pedido listo!" y espera a que el camarero (tú) le responda si está de acuerdo o quiere algo más.
+   Cuándo usarlo: Cuando quieres enviar un mensaje al usuario Y esperar una respuesta de él (por ejemplo, "¿Estás de acuerdo? Responde SÍ o NO").
+   Regla secreta: Puedes poner un "callback" (una función async (ctx, { flowDynamic, endFlow, fallBack }) => { ... }) para hacer cosas después de que el usuario responda.
+
+3. addAction (¡Haz Algo sin Esperar Respuesta Directa!):
+   ¿Qué hace? Es como cuando el chef termina de cocinar un plato y simplemente dice "¡Plato servido!" y pone el plato en la barra, sin esperar una respuesta inmediata del camarero.
+   Cuándo usarlo: Cuando quieres hacer una acción interna (como guardar datos, llamar a una API, o simplemente enviar un mensaje sin esperar una respuesta específica del usuario en ese mismo paso).
+   Regla secreta: Siempre tiene un "callback" donde puedes poner tu lógica.
+
+4. flowDynamic (¡Grita un Mensaje Rápido!):
+   ¿Qué hace? Es como el chef diciendo "¡Cuidado con la olla!" o "¡Gracias!". Es un mensaje rápido que puedes enviar en cualquier momento dentro de un addAnswer o addAction.
+   Cuándo usarlo: Para enviar mensajes adicionales, información o confirmaciones dentro de un paso.
+   Regla secreta: No lo uses solo. Siempre va dentro de un addAnswer o addAction.
+
+5. fallBack() (¡Vuelve a Preguntar!):
+   ¿Qué hace? Imagina que el chef te pidió sal y le trajiste azúcar. Él no se enoja, solo dice: "¡Error! Necesito sal. Por favor, tráela de nuevo." Y te devuelve a la pregunta anterior.
+   Cuándo usarlo: Cuando el usuario te da una respuesta inválida y quieres que REINTENTE la misma pregunta. El bot no avanza en el flujo, simplemente repite el último mensaje y espera una nueva respuesta.
+   Cómo usarlo: Siempre con return fallBack(); al final de tu lógica de validación fallida. ¡Y siempre después de haberle dicho al usuario qué hizo mal!
+
+6. endFlow() (¡Cocina Cerrada! ¡A Casa!):
+   ¿Qué hace? Es cuando el chef dice "¡Hemos terminado por hoy! ¡Cierre la cocina y vámonos a casa!". Detiene toda la conversación con ese usuario.
+   Cuándo usarlo: Cuando la interacción con el usuario ha terminado por completo y no esperas más entradas suyas para este flujo. El bot "olvidará" el estado de esa conversación.
+   Cómo usarlo: Siempre con return endFlow(); al final.
+
+La Regla Mas Importante del Linter (La "Prohibicion de Gritar y CERRAR la Cocina al mismo tiempo"):
+
+El linter es como el gerente de la cocina que dice:
+
+"¡No puedes GRITAR un mensaje ('flowDynamic' o 'addAnswer') Y cerrar la cocina ('endFlow') al mismo tiempo en el mismo aliento (callback)! ¡Es un desorden y no se sabe si el mensaje se envio bien antes de cerrar!"
+
+Pero, ¿Por que tanta 'Estrictez' del Gerente? (La Razon detras de la Regla)
+
+Tu bot, que es como el chef en nuestra analogia, usa una forma de trabajo llamada "asincrona". Esto significa que cuando el bot "grita un mensaje" (await flowDynamic(...)), el inicia el proceso de enviar ese mensaje al usuario, pero no espera de inmediato a que el mensaje llegue al telefono del usuario y sea leido. El sigue haciendo otras cosas.
+
+Si inmediatamente despues de que el bot "empieza a gritar el mensaje", tu le dices "¡Ah, y tambien cierra la cocina por completo ahora mismo!" (return endFlow()), pueden ocurrir problemas graves:
+
+1. Mensajes a Medias o Perdidos: Es como si el chef grita "¡Pedido listo!" y, antes de terminar la frase, apaga las luces y cierra la puerta. El camarero (el usuario) podria escuchar solo "¡Pedido li..." o no escuchar nada si la cocina se cierra demasiado rapido. El mensaje final podria no enviarse completamente o no ser recibido por el usuario.
+
+2. Conflictos Internos (¡Un Desorden en la Cocina!):
+   Cuando llamas a endFlow(), el sistema de bot-whatsapp empieza a "limpiar la cocina": borra el estado de la conversacion de ese usuario, olvida donde estaba en el flujo, etc.
+   Si esta "limpieza" ocurre al mismo tiempo que el bot todavia esta intentando "gritar un mensaje", puede haber un choque. Es como si el personal de limpieza entra a desmontar la cocina mientras el chef todavia esta intentando servir un plato. Esto lleva a errores internos o a un comportamiento impredecible del bot, lo que los programadores llaman una "condicion de carrera".
+
+El linter esta diseñado para ser tu "gerente sabio". Te obliga a seguir un patron seguro para evitar estos problemas. Te dice: "Primero asegurate de que el mensaje esta bien 'enviado' (al menos, que el proceso de envio haya comenzado correctamente y no este siendo interrumpido), y luego puedes preocuparte por cerrar la conversacion."
+
+Como Usarlos Correctamente (¡El Chef Organizado!):
+
+La clave es separar las tareas en diferentes "momentos" o "pasos" del flujo.
+
+Escenario: Quiero dar un mensaje final y luego terminar el flujo.
+
+Opcion 1: Un addAnswer seguido de un addAction (LA MAS SEGURA Y RECOMENDADA):
+
+Paso 1 (el addAnswer): El chef dice su mensaje final.
+Paso 2 (el addAction): Una vez que el mensaje anterior esta en camino, el chef limpia su estacion y luego dice "¡Cocina cerrada!".
+
+```javascript
+const flujoFinal_Rosarios = addKeyword(['finalizar', 'gracias', 'pedido listo'])
+    .addAnswer(
+        '¡Gracias por tu compra! ¡Pronto nos contactaremos contigo!', // 1. Este addAnswer solo envia el mensaje.
+        { capture: false } // No tiene un callback async aqui, por lo que no hay logica de flujo.
+    )
+    .addAction(async (ctx, { endFlow }) => { // 2. Este es un NUEVO paso.
+        // Aqui puedes poner cualquier logica de limpieza, etc.
+        console.log('Sesion terminada para:', ctx.from);
+        rutasDeConversacion.delete(ctx.from); // Limpia la sesion.
+        return endFlow(); // Ahora si, cierra el flujo de forma segura.
+    });
+```
+Con este patron, el linter esta feliz porque el acto de "gritar" (addAnswer) ocurre en un paso, y el acto de "cerrar la cocina" (endFlow) ocurre en un paso diferente y siguiente.
+
+Escenario: Quiero pedir algo al usuario y, si se equivoca, pedirle que reintente.
+
+```javascript
+.addAnswer('Por favor, ingresa tu DNI (8 digitos):', { capture: true }, async (ctx, { flowDynamic, fallBack }) => {
+    const dni = ctx.body.trim();
+    if (!/^\d{8}$/.test(dni)) {
+        await flowDynamic('⚠️ Formato de DNI invalido. ¡Por favor, ingresa 8 digitos numericos!'); // Chef: "¡Error, mal formato!"
+        return fallBack(); // Chef: "¡Intentálo de nuevo, vuelve a la pregunta anterior!"
+    }
+    // Si el DNI es correcto, el flujo continua al siguiente paso.
+})
+```
+
+Como Se Enlazan los Flujos (¡Navegando por el Menu del Chef!):
+
+Imagina que cada "flujo" (flujoBienvenida, flujoMenuPrincipal, flujoPedido, etc.) es un "plato completo" en el menu del chef. Para ir de un plato a otro, tienes dos formas principales:
+
+1. Por addKeyword (El Plato Principal o la Señal de "Quiero esto"):
+   ¿Como funciona? Los addKeyword que defines al inicio de cada flujo (o incluso dentro de un flujo) son como las palabras magicas que le dicen al bot: "¡Activa este plato!".
+   Ejemplo:
+   ```javascript
+   // Flujo de Bienvenida (el plato principal al inicio)
+   const flujoBienvenida = addKeyword(['hola', 'inicio', 'menu']) // Si el usuario dice 'hola', 'inicio' o 'menu', activa este flujo
+       .addAnswer('¡Bienvenido al restaurante!');
+
+   // Flujo del Menu Principal
+   const flujoMenuPrincipal = addKeyword(['menu', 'opciones']) // Si el usuario dice 'menu' o 'opciones', activa este flujo
+       .addAnswer('¿Que quieres ordenar? 1. Hamburguesa 2. Pizza');
+   ```
+   Importante: Cuando el bot esta en un flujo, si el usuario dice una keyword que no es del flujo actual, pero si es de otro flujo principal, el bot saltara a ese otro flujo. Es una forma de "salirse" de un flujo y empezar uno nuevo. Por eso, palabras como "inicio" o "menu" son muy comunes para volver al principio.
+
+2. Por gotoFlow() (El Chef te Sugiere el Siguiente Plato):
+   ¿Que hace? Es como cuando el chef termina de preparar un plato (un flujo) y dice: "¡Ahora te sugiero que pases al plato de postre!" (otro flujo). El bot te lleva directamente, sin necesidad de que el usuario escriba una palabra clave.
+   Cuando usarlo: Cuando quieres que la conversacion CONTINUE AUTOMATICAMENTE de un flujo a otro, basandose en la logica del bot (por ejemplo, despues de una validacion exitosa, o de que se complete una seccion del pedido).
+   Como usarlo: Lo usas dentro del callback de un addAnswer o addAction. Siempre usa return gotoFlow(nombreDelOtroFlujo); para asegurar que el control se transfiera.
+   Ejemplo:
+   ```javascript
+   // ... (dentro de un flujo, despues de pedir el DNI)
+   .addAnswer('Ingresa tu DNI:', { capture: true }, async (ctx, { flowDynamic, gotoFlow, fallBack }) => {
+       const dni = ctx.body.trim();
+       if (dni.length === 8) {
+           await flowDynamic('DNI validado correctamente.');
+           return gotoFlow(flujoPedido); // ¡Ahora el chef te lleva al flujo de "Pedido"!
+       } else {
+           await flowDynamic('DNI invalido.');
+           return fallBack();
+       }
+   });
+
+   // ... (otro flujo definido en tu codigo)
+   const flujoPedido = addKeyword(['pedido']) // Este tambien puede ser activado por la keyword 'pedido'
+       .addAnswer('¡Perfecto! ¿Que rosarios deseas?');
+   ```
+   Diferencia clave con addKeyword: gotoFlow es una transicion interna controlada por el bot, mientras que addKeyword es una activacion controlada por el usuario.
+
+En resumen, para enlazar y derivar flujos:
+
+Usa addKeyword para que el bot "escuche" y active flujos desde cualquier punto (util para el inicio o para volver al menu/flujos principales).
+Usa gotoFlow() para que el bot "guie" al usuario de un flujo a otro de forma programatica, cuando una accion o validacion se ha completado. 

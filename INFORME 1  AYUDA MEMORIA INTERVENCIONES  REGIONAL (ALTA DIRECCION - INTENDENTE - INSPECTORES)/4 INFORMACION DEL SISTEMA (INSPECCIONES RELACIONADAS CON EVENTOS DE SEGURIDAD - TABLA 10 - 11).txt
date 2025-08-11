@@ -1,0 +1,275 @@
+
+            
+           Select  * from (
+
+           Select DISTINCT
+                    to_number(A.V_ANHO) || '-'  || A.N_NUMDEP || '-' || A.V_NUMORDINSP as NUMERO_ORDEN,
+                    --NULL AS UNICO,
+                    CASE
+                        WHEN a.v_dependencia LIKE '%SUNAFIL%' THEN 'INTENDENCIA REGIONAL'
+                        ELSE 'GOBIERNO REGIONAL'
+                        END Competencia,
+                     /*CASE
+                      When A.n_numdep='0191' then 'LIMA'
+                      When A.n_numdep='0225' then 'LIMA PROVINCIA'
+                      When A.n_numdep='0252' then 'AREQUIPA'
+                      When A.n_numdep='0260' then 'CUSCO'
+                      When A.n_numdep='0298' then 'LIMA'
+                      When A.n_numdep='0332' then 'APURIMAC'
+                      When A.n_numdep='0227' then 'CALLAO'
+                      When A.n_numdep='0271' then 'HUÁNUCO'
+                      When A.n_numdep='0267' then 'ICA'
+                      When A.n_numdep='0265' then 'AYACUCHO'
+                      When A.n_numdep='0269' then 'JUNÍN'
+                      When A.n_numdep='0335' then 'LAMBAYEQUE'
+                      When A.n_numdep='0330' then 'LORETO'
+                      When A.n_numdep='0515' then 'LORETO'
+                      When A.n_numdep='0336' then 'MADRE DE DIOS'
+                      When A.n_numdep='0325' then 'MOQUEGUA'
+                      When A.n_numdep='0268' then 'PASCO'
+                      When A.n_numdep='0337' then 'PIURA'
+                      When A.n_numdep='0329' then 'PUNO'
+                      When A.n_numdep='0438' then 'PUNO'
+                      When A.n_numdep='0338' then 'SAN MARTIN'
+                      When A.n_numdep='0328' then 'TACNA'
+                      When A.n_numdep='0250' then 'LA LIBERTAD'
+                      When A.n_numdep='0339' then 'TUMBES'
+                      When A.n_numdep='0326' then 'UCAYALI'
+                      When A.n_numdep='0447' then 'SAN MARTIN'
+                      When A.n_numdep='0446' then 'SAN MARTIN'
+                      When A.n_numdep='0448' then 'SAN MARTIN'
+                      When A.n_numdep='0506' then 'APURÍMAC'
+                      When A.n_numdep='0324' then 'ANCASH'
+                      When A.n_numdep='0327' then 'MOQUEGUA'
+                      When A.n_numdep='0432' then 'PIURA'
+                      When A.n_numdep='0524' then 'PIURA'
+                      When A.n_numdep='0420' then 'PIURA'
+                      When A.n_numdep='0462' then 'LIMA'
+                      When A.n_numdep='0461' then 'LIMA'
+                        When A.n_numdep='0460' then 'LIMA' --DINII
+                      When A.n_numdep='0494' then 'ANCASH'
+                      When A.n_numdep='0509' then 'AREQUIPA'
+                      When A.n_numdep='0487' then 'CAJAMARCA'
+                      When A.n_numdep='1005' then 'CUSCO'
+                      When A.n_numdep='0484' then 'HUÁNUCO'
+                      When A.n_numdep='0491' then 'ICA'
+                      When A.n_numdep='0490' then 'LA LIBERTAD'
+                      When A.n_numdep='0489' then 'LORETO'
+                      When A.n_numdep='0492' then 'MOQUEGUA'
+                      When A.n_numdep='1017' then 'PIURA'
+                      When A.n_numdep='0493' then 'TUMBES'
+                      When A.n_numdep='0495' then 'ANCASH'
+                      When A.n_numdep='1020' then 'CALLAO'
+                      When A.n_numdep='1022' then 'LAMBAYEQUE'
+                      When A.n_numdep='1150' then 'AYACUCHO'
+                      When A.n_numdep='1151' then 'PUNO'
+                      When A.n_numdep='1267' then 'SAN MARTIN'
+                      When A.n_numdep='1268' then 'JUNÍN'
+                      When A.n_numdep='1273' then 'LIMA PROVINCIA'
+                      When A.n_numdep='1278' then 'PASCO'
+                      When A.n_numdep='1281' then 'MADRE DE DIOS'
+                      When a.n_numdep='1285' then 'HUANCAVELICA'
+                      When a.n_numdep='1288' then 'AMAZONAS'
+                      When a.n_numdep='1291' then 'APURIMAC'
+                      When A.n_numdep='1294' then 'UCAYALI'
+                      When A.n_numdep='1297' then 'TACNA'
+                      ELSE 'NULL'
+                      END AS REGION,*/
+                      
+                      CASE 
+                      WHEN NOT B.V_DESDEP='LIMA' THEN B.V_DESDEP
+                      WHEN B.V_DESDEP='LIMA' AND B.V_DESPRO='LIMA' THEN 'LIMA'
+                      WHEN B.V_DESDEP='LIMA' AND NOT B.V_DESPRO='LIMA' THEN 'LIMA PROVINCIA'
+                      ELSE ''
+                      END AS REGION,
+  
+                    CASE
+                      When a.n_numdep='0191' then 'MTPE' -- DIT-MTPE
+                      When a.n_numdep='0225' then 'GORE LIMA PROVINCIA'
+                      When a.n_numdep='0252' then 'GORE AREQUIPA'
+                      When a.n_numdep='0260' then 'GORE CUSCO'
+                      When a.n_numdep='0298' then 'MTPE' -- DGPIT
+                      When a.n_numdep IN ('0332','0506') then 'GORE APURÍMAC'
+                      When a.n_numdep='0227' then 'GORE CALLAO'
+                      When a.n_numdep='0271' then 'GORE HUÁNUCO'
+                      When a.n_numdep='0267' then 'GORE ICA'
+                      When a.n_numdep='0265' then 'GORE AYACUCHO'
+                      When a.n_numdep='0269' then 'GORE JUNÍN'
+                      When a.n_numdep='0335' then 'GORE LAMBAYEQUE'
+                      When a.n_numdep IN ('0330','0515') then 'GORE LORETO'
+                      When a.n_numdep='0336' then 'GORE MADRE DE DIOS'
+                      When a.n_numdep IN ('0325','0327') then 'GORE MOQUEGUA'
+                      When a.n_numdep='0268' then 'GORE PASCO'
+                      When a.n_numdep IN ('0329','0438') then 'GORE PUNO'
+                      When a.n_numdep='0328' then 'GORE TACNA'
+                      When a.n_numdep='0250' then 'GORE LA LIBERTAD'
+                      When a.n_numdep='0339' then 'GORE TUMBES'
+                      When a.n_numdep='0326' then 'GORE UCAYALI'
+                      When a.n_numdep IN ('0338','0446','0447','0448') then 'GORE SAN MARTÍN'
+                      When a.n_numdep='0324' then 'GORE ÁNCASH'
+                      When a.n_numdep IN ('0337','0420','0432','0524') then 'GORE PIURA'
+                      When a.n_numdep='0462' then 'ILM'
+                      When a.n_numdep='0461' AND A.D_FECCIERRE <'01/01/2022' then 'INSSI'
+                      When a.n_numdep IN ('460','461') AND A.D_FECCIERRE >='01/01/2022' then 'DINI'
+                      When a.n_numdep IN ('0494','0495') then 'IRE ÁNCASH'
+                      When a.n_numdep='0509' then 'IRE AREQUIPA'
+                      When a.n_numdep='0487' then 'IRE CAJAMARCA'
+                      When a.n_numdep='1005' then 'IRE CUSCO'
+                      When a.n_numdep='0484' then 'IRE HUÁNUCO'
+                      When a.n_numdep='0491' then 'IRE ICA'
+                      When a.n_numdep='0490' then 'IRE LA LIBERTAD'
+                      When a.n_numdep='0489' then 'IRE LORETO'
+                      When a.n_numdep='0492' then 'IRE MOQUEGUA'
+                      When a.n_numdep='1017' then 'IRE PIURA'
+                      When a.n_numdep='0493' then 'IRE TUMBES'
+                      When a.n_numdep='1020' then 'IRE CALLAO'
+                      When a.n_numdep='1022' then 'IRE LAMBAYEQUE'
+                      When a.n_numdep='1150' then 'IRE AYACUCHO'
+                      When a.n_numdep='1151' then 'IRE PUNO'
+                      When a.n_numdep='1267' then 'IRE SAN MARTÍN'
+                      When a.n_numdep='1268' then 'IRE JUNÍN'
+                      When a.n_numdep='1273' then 'IRE LIMA'
+                      When a.n_numdep='1278' then 'IRE PASCO'
+                      When a.n_numdep='1281' then 'IRE MADRE DE DIOS'
+                      When a.n_numdep='1285' then 'IRE HUANCAVELICA'
+                      When a.n_numdep='1288' then 'IRE AMAZONAS'
+                      When a.n_numdep='1291' then 'IRE APURÍMAC'
+                      When a.n_numdep='1294' then 'IRE UCAYALI'
+                      When a.n_numdep='1297' then 'IRE TACNA'
+                      ELSE 'NO_VALUE'
+                      END AS Dependencia,
+                     
+                    to_char(A.D_FECCIERRE,'YYYY') AS ano_CIERRE,
+                    to_char(A.D_FECCIERRE,'MM') AS mes_CIERRE,
+                    A.V_RUC,
+                    A.V_RESULTADO as V_RESULTADO ,
+                   
+                    CASE
+                      When A.V_CODSEC='A' then 'AGRICULTURA'
+                      When A.V_CODSEC='K' then 'SERVICIOS (INMOBILIARIAS, EMPRESARIALES Y ALQUILERES)'
+                      When A.V_CODSEC='M' then 'ENSEÑANZA'
+                      When A.V_CODSEC='F' then 'CONSTRUCCIÓN'
+                      When A.V_CODSEC='G' then 'COMERCIO AL POR MAYOR Y MENOR'
+                      When A.V_CODSEC='D' then 'INDUSTRIAS MANUFACTURERAS'
+                      When A.V_CODSEC='H' then 'HOTELES Y RESTAURANTES'
+                      When A.V_CODSEC='I' then 'TRANSPORTES Y ALMACENAMIENTO'
+                      When A.V_CODSEC='O' then 'OTROS'
+                      When A.V_CODSEC='N' then 'SERVICIOS SOCIALES Y DE SALUD'
+                      When A.V_CODSEC='C' then 'EXPLOTACIÓN DE MINAS Y CANTERAS'
+                      When A.V_CODSEC='J' then 'INTERMEDIACIÓN FINANCIERA'
+                      When A.V_CODSEC='L' then 'ADMINISTRACIÓN PÚBLICA'
+                      When A.V_CODSEC='E' then 'SUMINISTRO DE ELECTRICIDAD, GAS Y AGUA'
+                      When A.V_CODSEC='B' then 'PESCA'
+                      When A.V_CODSEC='P' then 'OTROS'
+                      When A.V_CODSEC='Z' then 'OTROS' -- No identificado
+                      When A.V_CODSEC='Q' then 'OTROS' -- Organizaciones y organismos extraterritoriales
+                      When A.V_CODSEC=''  then 'OTROS'
+                      When A.V_CODSEC='NULL'  then 'OTROS'
+                      ELSE 'VERIFICAR SECTOR'
+                      END AS V_DESSEC,
+                      
+                      
+                      CASE
+                      When A.V_CODSEC='A' then 'A'
+                      When A.V_CODSEC='K' then 'K'
+                      When A.V_CODSEC='M' then 'M'
+                      When A.V_CODSEC='F' then 'F'
+                      When A.V_CODSEC='G' then 'G'
+                      When A.V_CODSEC='D' then 'D'
+                      When A.V_CODSEC='H' then 'H'
+                      When A.V_CODSEC='I' then 'I'
+                      When A.V_CODSEC='O' then 'O'
+                      When A.V_CODSEC='N' then 'N'
+                      When A.V_CODSEC='C' then 'C'
+                      When A.V_CODSEC='J' then 'J'
+                      When A.V_CODSEC='L' then 'L'
+                      When A.V_CODSEC='E' then 'E'
+                      When A.V_CODSEC='B' then 'B'
+                      When A.V_CODSEC='P' then 'O' -- 'HOGAR.PRIVAD.CON SERV.DOMESTIC.'
+                      When A.V_CODSEC='Z' then 'O' -- No identificado
+                      When A.V_CODSEC='Q' then 'O' -- Organizaciones y organismos extraterritoriales
+                      When A.V_CODSEC=''  then 'O' -- Vacio
+                      When A.V_CODSEC='NULL'  then 'OTROS'
+                      ELSE 'VERIFICAR SECTOR'
+                      END AS V_CODSEC,
+                      --A.V_CODSEC,
+                    
+                    CASE
+                       WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_FLGCIEFOR = 'S' THEN 'S'    ---- CRITERIO OGTIC
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CIERRE X%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CIERR X%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CIERR %' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CIERR.%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CERR.X%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%CERRADO X%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%SOLICITUD DE INII%' THEN 'S'
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%SUNAFIL/INII%' THEN 'S'
+                         ELSE 'N'
+                         END AS CIERRE_MASIVO,
+
+                    CASE
+                         WHEN A.D_FECCIERRE >= '01/01/2020' and A.V_OBS LIKE '%TRANS%' and A.D_FECCREACION > A.D_FECSALIDA THEN 'S'
+                         ELSE 'N'
+                         END AS TRANSFERENCIA,
+                         
+                         
+                    CASE
+                        When a.n_numdep ='0191' AND A.D_FECCIERRE >= '19/06/2020' THEN 'N' --- 'DIT - MTPE'
+                        When a.n_numdep ='0225' AND A.D_FECCIERRE >= '26/07/2019' THEN 'N' --- 'GRTPE LIMA PROVINCIA'
+                        --When a.n_numdep ='0252' AND A.D_FECCIERRE >= '19/07/2019' THEN 'NO' --- 'GRTPE AREQUIPA'  --- GORE ACTIVA
+                        When a.n_numdep ='0260' AND A.D_FECCIERRE >= '16/07/2021' THEN 'N' --- 'DRTPE CUSCO'
+                        --When a.n_numdep ='0298' AND A.D_FECCIERRE >= '19/07/2019' THEN 'NO' --- 'DGPIT' --- VERIFICAR LA FECHA DE CIERRE!!!!
+                        When a.n_numdep IN ('0332','0506') AND A.D_FECCIERRE >= '16/10/2020' THEN 'N' ---'DRTPE APURÍMAC'
+                        When a.n_numdep ='0227' AND A.D_FECCIERRE >= '19/06/2019' THEN 'N' --- 'DRTPE CALLAO'
+                        When a.n_numdep ='0271' AND A.D_FECCIERRE >= '17/12/2021' THEN 'N' --- 'DRTPE HUÁNUCO'
+                        When a.n_numdep ='0267' AND A.D_FECCIERRE >= '02/12/2019' THEN 'N' --- 'DRTPE ICA'
+                            When a.n_numdep ='0265' AND A.D_FECCIERRE >= '11/04/2022' THEN 'N' --- 'DRTPE AYACUCHO' 
+                        When a.n_numdep ='0269' AND A.D_FECCIERRE >= '18/12/2020' THEN 'N' --- 'DRTPE JUNÍN'
+                        When a.n_numdep ='0335' AND A.D_FECCIERRE >= '13/12/2019' THEN 'N' --- 'GRTPE LAMBAYEQUE'
+                        When a.n_numdep IN ('0330','0515') AND A.D_FECCIERRE >= '12/09/2022' THEN 'N' --- 'DRTPE LORETO'
+                        When a.n_numdep ='0336' AND A.D_FECCIERRE >= '18/10/2019' THEN 'N' --- 'DRTPE MADRE DE DIOS'
+                        When a.n_numdep  IN ('0325','0327') AND A.D_FECCIERRE >= '15/10/2021' THEN 'N' --- 'GRTPE MOQUEGUA'
+                        When a.n_numdep ='0268' AND A.D_FECCIERRE >= '16/09/2019' THEN 'N' --- 'DRTPE PASCO'
+                        When a.n_numdep IN ('0329','0438') AND A.D_FECCIERRE >= '22/06/2021' THEN 'N' --- 'DRTPE PUNO'
+                        When a.n_numdep ='0328' AND A.D_FECCIERRE >= '04/12/2020' THEN 'N' ---'DRTPE TACNA'
+                        When a.n_numdep ='0250' AND A.D_FECCIERRE >= '15/06/2022' THEN 'N' --- 'GRTPE LA LIBERTAD' --- GORE ACTIVA
+                        When a.n_numdep ='0339' AND A.D_FECCIERRE >= '30/06/2021' THEN 'N' --- 'DRTPE TUMBES'
+                        When a.n_numdep ='0326' AND A.D_FECCIERRE >= '13/11/2021' THEN 'N' --- 'DRTPE UCAYALI'
+                        When a.n_numdep IN ('0338','0446','0447','0448') AND A.D_FECCIERRE >= '27/11/2020' THEN 'N' ---'DRTPE SAN MARTIN'
+                        When a.n_numdep ='0324' AND A.D_FECCIERRE >= '27/08/2019' THEN 'N' --- 'DRTPE ANCASH'
+                        when a.n_numdep IN ('0337','0432','0420','0524') AND A.D_FECCIERRE >= '30/11/2021' THEN 'N' --- 'DRTPE PIURA'     
+                        ELSE 'S'
+                        END AS ORDENES_PROCEDEN,
+                        
+                        case
+                        when A.V_ACCIDENTE='ACCIDENTE MORTALES' OR A.V_FLGSAT='M' then 'ACCIDENTE MORTALES'
+                        WHEN  A.V_ACCIDENTE='ACCIDENTE DE TRABAJO' OR A.V_FLGSAT='A' THEn 'ACCIDENTE DE TRABAJO'
+                        when A.V_ACCIDENTE='ENFERMEDADES OCUPACIONALES' OR A.V_FLGSAT='E' then 'ENFERMEDADES OCUPACIONALES'
+                        when A.V_ACCIDENTE='INCIDENTE PELIGROSOS' OR A.V_FLGSAT='I' then 'INCIDENTE PELIGROSOS'
+                        else 'NO'
+                        END AS ACCIDEN,
+                        A.V_FLGSAT--,
+                    
+                    from SIIT.VST_ORDENESINSPECCION A
+                    LEFT JOIN SIIT.VST_UBIGEO B ON (A.V_CODDEP=B.V_CODDEP AND A.V_CODPRO=B.V_CODPRO AND A.V_CODDIS=B.V_CODDIS)
+                    
+                    WHERE 
+                    
+                    (A.D_FECCIERRE >= '01/01/2014' AND   A.D_FECCIERRE <(SELECT TO_CHAR   (SYSDATE, 'DD/MM/YYYY')    FROM DUAL)  
+                    )
+                 
+                    
+          
+      ) O 
+      
+WHERE   
+(
+
+ORDENES_PROCEDEN='S'
+AND 
+CIERRE_MASIVO<>'S'
+AND 
+TRANSFERENCIA<>'S'
+AND 
+ACCIDEN<>'NO'
+)

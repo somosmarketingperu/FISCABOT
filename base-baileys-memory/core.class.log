@@ -1,0 +1,143 @@
+[handleMsg]:  {
+  key: {
+    remoteJid: '51999900396@s.whatsapp.net',
+    fromMe: false,
+    id: 'CDE3BE7F30A940DC543DADA8D6B657D9',
+    participant: undefined
+  },
+  messageTimestamp: 1754687690,
+  pushName: 'Richmond',
+  broadcast: false,
+  message: Message {
+    conversation: 'Hola',
+    messageContextInfo: MessageContextInfo {
+      deviceListMetadata: [DeviceListMetadata],
+      deviceListMetadataVersion: 2,
+      messageSecret: [Uint8Array]
+    }
+  },
+  body: 'Hola',
+  from: '51999900396'
+}
+[QUEUE_SE_ENVIO]:  {
+  ref: 'ans_cc52519c-40c2-4404-a01c-034728dc0807',
+  keyword: 'key_cbc821d0-c676-48d3-8d16-69c5883ed0b6',
+  answer: '¡Hola! Soy FiscaBot, tu asistente virtual de la SUNAFIL.\n' +
+    'Por favor, ingresa tu correo institucional (nombre.apellido@sunafil.gob.pe):',
+  options: {
+    media: null,
+    buttons: [],
+    capture: true,
+    child: null,
+    delay: 0,
+    idle: null,
+    ref: null,
+    nested: [],
+    keyword: {},
+    callback: true
+  },
+  refSerialize: 'ef651e40a6571e69292332fbc65459bf'
+}
+[handleMsg]:  {
+  key: {
+    remoteJid: '51999900396@s.whatsapp.net',
+    fromMe: false,
+    id: 'AA761401D3356E74185A0ED64CCB93A9',
+    participant: undefined
+  },
+  messageTimestamp: 1754687696,
+  pushName: 'Richmond',
+  broadcast: false,
+  message: Message {
+    conversation: 'Jgarciaq@sunafil.gob.pe',
+    messageContextInfo: MessageContextInfo {
+      deviceListMetadata: [DeviceListMetadata],
+      deviceListMetadataVersion: 2,
+      messageSecret: [Uint8Array]
+    }
+  },
+  body: 'Jgarciaq@sunafil.gob.pe',
+  from: '51999900396'
+}
+[QUEUE_SE_ENVIO]:  {
+  ref: 'ans_db16b469-d12b-44b2-bde4-3cb7db1157d0',
+  keyword: 'ans_cc52519c-40c2-4404-a01c-034728dc0807',
+  answer: 'Gracias. Ahora, por favor, ingresa tu contraseña institucional.\n' +
+    '(Tu mensaje será borrado automáticamente por seguridad)',
+  options: {
+    media: null,
+    buttons: [],
+    capture: true,
+    child: null,
+    delay: 0,
+    idle: null,
+    ref: null,
+    nested: [],
+    keyword: {},
+    callback: true
+  },
+  refSerialize: '4ed0127598dbe98d1f0a6ded608c3953'
+}
+[handleMsg]:  {
+  key: {
+    remoteJid: '51999900396@s.whatsapp.net',
+    fromMe: false,
+    id: 'B4561C881CBBBEF2D2AE084DF1512C3B',
+    participant: undefined
+  },
+  messageTimestamp: 1754687699,
+  pushName: 'Richmond',
+  broadcast: false,
+  message: Message {
+    conversation: '1234',
+    messageContextInfo: MessageContextInfo {
+      deviceListMetadata: [DeviceListMetadata],
+      deviceListMetadataVersion: 2,
+      messageSecret: [Uint8Array]
+    }
+  },
+  body: '1234',
+  from: '51999900396'
+}
+[handleMsg]:  {
+  key: {
+    remoteJid: '51999900396@s.whatsapp.net',
+    fromMe: false,
+    id: '02A13A9B92E379F1B7794EE619F0A5C6',
+    participant: undefined
+  },
+  messageTimestamp: 1754687703,
+  pushName: 'Richmond',
+  broadcast: false,
+  message: Message {
+    conversation: 'C',
+    messageContextInfo: MessageContextInfo {
+      deviceListMetadata: [DeviceListMetadata],
+      deviceListMetadataVersion: 2,
+      messageSecret: [Uint8Array]
+    }
+  },
+  body: 'C',
+  from: '51999900396'
+}
+[handleMsg]:  {
+  key: {
+    remoteJid: '51999900396@s.whatsapp.net',
+    fromMe: false,
+    id: 'AA4E665DCEDF5FFBEF9659ECA938B2A0',
+    participant: undefined
+  },
+  messageTimestamp: 1754687708,
+  pushName: 'Richmond',
+  broadcast: false,
+  message: Message {
+    conversation: '1',
+    messageContextInfo: MessageContextInfo {
+      deviceListMetadata: [DeviceListMetadata],
+      deviceListMetadataVersion: 2,
+      messageSecret: [Uint8Array]
+    }
+  },
+  body: '1',
+  from: '51999900396'
+}

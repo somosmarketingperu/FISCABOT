@@ -1,0 +1,24 @@
+Funcionalidades del Chatbot 
+1. Obtener Información Completa de la Empresa:
+
+Datos Generales y Contacto:
+Consultar Razón Social, RUC y estado del contribuyente.
+Identificar al Representante Legal (SUNAT) y al de la Casilla Electrónica (Sunafil).
+Mostrar teléfonos y correos de contacto (del SIIT).
+Ubicar la dirección en Google Maps.
+Historial y Antecedentes:
+Verificar si tiene denuncias previas y sobre qué materias (CTS, gratificaciones, etc.).
+Acceder a las resoluciones del Tribunal de Fiscalización Laboral.
+Ver y descargar la Orden de Inspección de una denuncia actual (PDF con mapa).
+Información Sindical:
+Consultar el número de sindicatos y los nombres de sus representantes (directiva).
+2. Consultar Datos del Trabajador:
+
+Al ingresar un DNI, mostrar: nombre, cargo, periodos laborados y empleador actual.
+Visualizar la constancia de alta en la planilla.
+Generar e imprimir un reporte con toda la información del trabajador.
+3. Acceder a Información Normativa (Ayuda Rápida):
+
+Consultar guías sobre Seguridad y Salud en el Trabajo (por sector: lavandería, construcción, etc.).
+Tener a la mano los límites máximos permisibles de agentes químicos.
+Obtener información sobre normas socio-laborales y trabajo infantil.
