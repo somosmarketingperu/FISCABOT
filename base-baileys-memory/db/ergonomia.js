@@ -1,222 +1,8 @@
-// database.js
-const oracledb = require('oracledb');
-oracledb.initOracleClient({ libDir: 'C:\\oracle\\instantclient-basic-windows.x64-23.8.0.25.04\\instantclient_23_8' });
-const config = require('./config');
-const { generarPDFReporteErgonomia } = require('./pdfGenerator');
+const { executeQuerySIIT } = require('./connection');
+const { generarPDFReporteErgonomia } = require('../reports/ergonomiaReport');
 
-// Función para inicializar el pool
-async function initializePool() {
-    try {
-        await oracledb.createPool(config.db);
-        console.log("Pool de conexiones de Oracle creado exitosamente.");
-    } catch (err) {
-        console.error("Error al inicializar el pool de Oracle:", err);
-        process.exit(1);
-    }
-}
-
-// Función para ejecutar consultas
-async function executeQuery(sql, params = []) {
-    let connection;
-    try {
-        console.log('--- EJECUTANDO CONSULTA SQL ---');
-        console.log('SQL:', sql);
-        console.log('Parámetros:', params);
-        connection = await oracledb.getConnection();
-        const result = await connection.execute(sql, params, { outFormat: oracledb.OBJECT });
-        console.log('Resultado:', result.rows);
-        return result.rows;
-    } catch (err) {
-        console.error("Error en la base de datos:", err);
-        return [];
-    } finally {
-        if (connection) {
-            try {
-                await connection.close();
-            } catch (err) {
-                console.error("Error al cerrar la conexión:", err);
-            }
-        }
-    }
-}
-
-// Consulta datos generales de empresa por RUC (QUERY 1)
-async function getEmpresaDatosGenerales(ruc) {
-    // Aquí va el query integral de empresa (ajusta según tu versión final)
-    const sql = `WITH PRIMER_ANEXO AS (
-        SELECT ANEXO_BASE.*, ROW_NUMBER() OVER (PARTITION BY V_NUMRUC ORDER BY N_CODCORREL) as RN
-        FROM ODS.MD_SUTB_EMPLEADORANEXOS ANEXO_BASE
-    ),
-    INFO_PLANILLON AS (
-        SELECT PLANILLON_BASE.*, ROW_NUMBER() OVER (PARTITION BY RUC ORDER BY AÑO DESC, COMPETENCIA DESC) as RN_PLANILLON
-        FROM USR_JPARIONA.DINI_PLANILLON_HIST PLANILLON_BASE
-    )
-    SELECT
-        EMPLEADOR.V_DESNOMBRE AS "Nombre/Razón Social",
-        EMPLEADOR.V_NOMCOM AS "Nombre Comercial",
-        EMPLEADOR.D_FECALT AS "Fecha Alta",
-        EMPLEADOR.D_CONSTI AS "Fecha Constitución",
-        EMPLEADOR.D_INICIO AS "Fecha Inicio Actividades",
-        VIA_PRINCIPAL.V_DESTIPVIA AS "Dirección Principal - Tipo Vía",
-        EMPLEADOR.V_NOMVIA AS "Dirección Principal - Nombre Vía",
-        EMPLEADOR.V_NUMER1 AS "Dirección Principal - Número",
-        ZONA_PRINCIPAL.V_DESTIPZON AS "Dirección Principal - Zona",
-        EMPLEADOR.V_CODCIIU AS "Actividad Económica (CIIU 1)",
-        EMPLEADOR.V_CODCIIU2 AS "Actividad Económica (CIIU 2)",
-        EMPLEADOR.V_TEL1 AS "Teléfono 1",
-        EMPLEADOR.V_TEL2 AS "Teléfono 2",
-        EMPLEADOR.V_TEL3 AS "Teléfono 3",
-        EMPLEADOR.V_FAX AS "Fax",
-        EMPLEADOR.V_FICHA AS "Ficha Registral",
-        EMPLEADOR.V_ASIENTORRPP AS "Asiento Registros Públicos",
-        EMPLEADOR.V_DESPARREG AS "Partida Registral",
-        EMPLEADOR.V_CODESTADO AS "Estado",
-        EMPLEADOR.V_PATRON AS "Patrón",
-        EMPLEADOR.V_DEPORI AS "Origen",
-        EMPLEADOR.V_CODCONTAB AS "Código Contabilidad",
-        EMPLEADOR.V_CODFACTUR AS "Código Facturación",
-        REP_LEGAL.V_NOMBRE AS "Rep Legal - Nombre",
-        REP_LEGAL.V_NRODOC AS "Rep Legal - Documento",
-        REP_LEGAL.V_CARGOO AS "Rep Legal - Cargo",
-        REP_LEGAL.D_FECVDESDE AS "Rep Legal - Fecha Inicio Cargo",
-        PLANILLON.TIPO_EMPRESA AS "Planillón - Tipo Empresa",
-        PLANILLON.TAMAÑO_RENTA AS "Planillón - Tamaño Empresa",
-        PLANILLON.TAMAÑO_REMYPE AS "Planillón - Tamaño REMYPE",
-        PLANILLON.ESTADO_CONTRIBUYENTE AS "Planillón - Estado Contribuyente",
-        PLANILLON.COND_DOMICILIO_FISCAL AS "Planillón - Condición Domicilio",
-        PLANILLON."INDICADOR SST" AS "Planillón - Indicador SST",
-        PLANILLON.ANEXOS AS "Planillón - Nro. de Anexos",
-        CORREO_CE.CORREO_ELECTRONICO AS "Correo Casilla Electrónica",
-        TEL_CE.NUMERO_TELEFONO AS "Teléfono Casilla Electrónica",
-        CORREO_TR.CORREO_ELECTRONICO AS "Correo T-Registro",
-        TEL_TR.NUMERO_TELEFONO AS "Teléfono T-Registro",
-        CORREO_SU.CORREO_ELECTRONICO AS "Correo SUNAT",
-        TEL_SU.NUMERO_TELEFONO AS "Teléfono SUNAT",
-        SECTOR.DESC_CIIU_PADRON AS "Sector - Descripción Actividad",
-        SECTOR.DES_SEC_PADRON AS "Sector - Descripción Sector",
-        SECTOR.IND_ALTRIESGO AS "Sector - Indicador Alto Riesgo",
-        VIA_ANEXO.V_DESTIPVIA AS "Anexo - Tipo Vía",
-        ANEXO.V_NOMVIA AS "Anexo - Nombre Vía",
-        ANEXO.V_NUMER1 AS "Anexo - Número",
-        ZONA_ANEXO.V_DESTIPZON AS "Anexo - Zona",
-        ANEXO.V_REFER1 AS "Anexo - Referencia",
-        ANEXO.V_CODTIPEST AS "Anexo - Tipo Establecimiento",
-        ANEXO.V_CODINDCONLEG AS "Anexo - Indicador Legal"
-    FROM
-        ODS.MD_SUTB_EMPLEADOR EMPLEADOR
-    LEFT JOIN ODS.MD_SUTB_TIPOVIA VIA_PRINCIPAL ON EMPLEADOR.V_CODTIPVIA = VIA_PRINCIPAL.V_CODTIPVIA
-    LEFT JOIN USR_JPARIONA.MD_SUTB_TIPOZONA ZONA_PRINCIPAL ON EMPLEADOR.V_CODTIPZON = ZONA_PRINCIPAL.V_CODTIPZON
-    LEFT JOIN ODSSTG.SUTB_REPRESENTANTELEGAL REP_LEGAL ON EMPLEADOR.V_NUMRUC = REP_LEGAL.V_NUMRUC
-    LEFT JOIN INFO_PLANILLON PLANILLON ON EMPLEADOR.V_NUMRUC = PLANILLON.RUC AND PLANILLON.RN_PLANILLON = 1
-    LEFT JOIN USR_JPARIONA.DINI_CORREO_CE CORREO_CE ON EMPLEADOR.V_NUMRUC = CORREO_CE.RUC
-    LEFT JOIN USR_JPARIONA.DINI_TELEFONO_CE TEL_CE ON EMPLEADOR.V_NUMRUC = TEL_CE.RUC
-    LEFT JOIN USR_JPARIONA.DINI_CORREO_TR CORREO_TR ON EMPLEADOR.V_NUMRUC = CORREO_TR.RUC
-    LEFT JOIN USR_JPARIONA.DINI_TELEFONO_TR TEL_TR ON EMPLEADOR.V_NUMRUC = TEL_TR.RUC
-    LEFT JOIN USR_JPARIONA.DINI_CORREO_SU CORREO_SU ON EMPLEADOR.V_NUMRUC = CORREO_SU.RUC
-    LEFT JOIN USR_JPARIONA.DINI_TELEFONO_SU TEL_SU ON EMPLEADOR.V_NUMRUC = TEL_SU.RUC
-    LEFT JOIN USR_JPARIONA.INII_SECTORES_ECONOMICOS SECTOR ON EMPLEADOR.V_CODCIIU = SECTOR.CIIU_PADRON
-    LEFT JOIN PRIMER_ANEXO ANEXO ON EMPLEADOR.V_NUMRUC = ANEXO.V_NUMRUC AND ANEXO.RN = 1
-    LEFT JOIN ODS.MD_SUTB_TIPOVIA VIA_ANEXO ON ANEXO.V_CODTIPVIA = VIA_ANEXO.V_CODTIPVIA
-    LEFT JOIN USR_JPARIONA.MD_SUTB_TIPOZONA ZONA_ANEXO ON ANEXO.V_CODTIPZON = ZONA_ANEXO.V_CODTIPZON
-    WHERE EMPLEADOR.V_NUMRUC = :ruc`;
-    const rows = await executeQuery(sql, [ruc]);
-    return rows;
-}
-
-// Lista de trabajadores declarados en el último periodo para un RUC (QUERY 2)
-async function getListaTrabajadoresUltimoPeriodo(ruc) {
-    const sql = `
-        SELECT 
-            t.V_NUMDOCIDE AS DNI, 
-            p.NOMBRE_TRABAJADOR, 
-            p.TIPO_TRABAJADOR, 
-            p.SEXO, 
-            p.EDAD, 
-            p.NACIONALIDAD
-        FROM DINI_PLAME_TRABAJADOR t
-        LEFT JOIN DINI_PLANILLON_HIST p
-            ON t.V_NUMDOCIDE = p.NUM_DOC AND t.V_NUMRUC = p.RUC
-        WHERE t.V_NUMRUC = :ruc
-          AND t.V_PERDECLA = (
-              SELECT MAX(V_PERDECLA) 
-              FROM DINI_PLAME_TRABAJADOR 
-              WHERE V_NUMRUC = :ruc
-          )
-        ORDER BY p.NOMBRE_TRABAJADOR
-    `;
-    const rows = await executeQuery(sql, [ruc]);
-    return rows;
-}
-
-// Resumen de trabajadores declarados en el último periodo para un RUC (QUERY 3)
-async function getResumenTrabajadoresUltimoPeriodo(ruc) {
-    const sql = `
-        SELECT 
-            t.V_PERDECLA AS "Ultimo_Periodo",
-            COUNT(*) AS "Cantidad_Trabajadores_Declarados"
-        FROM DINI_PLAME_TRABAJADOR t
-        WHERE t.V_NUMRUC = :ruc
-          AND t.V_PERDECLA = (
-              SELECT MAX(V_PERDECLA) 
-              FROM DINI_PLAME_TRABAJADOR 
-              WHERE V_NUMRUC = :ruc
-          )
-        GROUP BY t.V_PERDECLA
-    `;
-    const rows = await executeQuery(sql, [ruc]);
-    return rows[0] || null;
-}
-
-// Consulta datos de trabajador por DNI (Planillón)
-async function getTrabajadorDatos(dni) {
-    const sql = `SELECT RUC, RAZON_SOCIAL, NOMBRE_TRABAJADOR, NUM_DOC, TIPO_TRABAJADOR, SEXO, EDAD, NACIONALIDAD, AÑO, ENERO, FEBRERO, MARZO, ABRIL, MAYO, JUNIO, JULIO, AGOSTO, SETIEMBRE, OCTUBRE, NOVIEMBRE, DICIEMBRE FROM DINI_PLANILLON_HIST WHERE NUM_DOC = TO_CHAR(:dni) ORDER BY AÑO DESC FETCH FIRST 1 ROWS ONLY`;
-    const rows = await executeQuery(sql, [dni]);
-    return rows[0] || null;
-}
-
-// Consulta última planilla (PLAME) del trabajador por DNI
-async function getTrabajadorUltimaPlanilla(dni) {
-    const sql = `SELECT V_PERDECLA, N_NUMEFELAB, N_MTOTOTPAG, (N_MTOTOTPAG * 0.09) AS APORTE_ESSALUD FROM INSUMO WHERE V_NUMDOCIDE = TO_CHAR(:dni) ORDER BY V_PERDECLA DESC FETCH FIRST 1 ROWS ONLY`;
-    const rows = await executeQuery(sql, [dni]);
-    return rows[0] || null;
-}
-
-// Función para generar reporte de ergonomía
-async function generarReporteErgonomia() {
-    try {
-        console.log('🔄 Generando reporte de ergonomía...');
-        
-        // Obtener datos de las 4 tablas
-        const datosTabla1 = await obtenerTablaOrigen();
-        const datosTabla2 = await obtenerTablaResultado();
-        const datosTabla3 = await obtenerTablaSector();
-        const datosTabla4 = await obtenerTablaRegion();
-        
-        // Calcular resumen
-        const resumen = calcularResumen(datosTabla1, datosTabla2);
-        
-        // Generar PDF
-        const pdfBuffer = await generarPDFReporteErgonomia({
-            titulo: "AYUDA DE MEMORIA DEL SISTEMA DE INSPECCIÓN DEL TRABAJO EN: MATERIA: MATER-Ergonomía(72)",
-            tabla1: datosTabla1,
-            tabla2: datosTabla2,
-            tabla3: datosTabla3,
-            tabla4: datosTabla4,
-            resumen: resumen
-        });
-        
-        console.log('✅ Reporte de ergonomía generado exitosamente');
-        return pdfBuffer;
-        
-    } catch (error) {
-        console.error('❌ Error generando reporte de ergonomía:', error);
-        throw error;
-    }
-}
-
-// Tabla 1: Origen
 async function obtenerTablaOrigen() {
-    const sql = `
+  const sql = `
         SELECT 
             ORIGEN,
             SUM(CASE WHEN AÑO_CIERRE = '2016' THEN 1 ELSE 0 END) AS "2016",
@@ -278,17 +64,16 @@ async function obtenerTablaOrigen() {
             FROM SIIT.VST_ORDENESINSPECCION A
             LEFT JOIN SIIT.VST_MATINSPECXOI C on (a.v_numordinsp=c.V_NUMORDINSP and a.v_anho=c.V_ANHO and a.n_numdep=c.N_NUMDEP)
             WHERE (A.D_FECCIERRE >= TO_DATE('01/01/2016','DD/MM/YYYY') and A.D_FECCIERRE < (SELECT SYSDATE FROM DUAL))
-                AND C.N_CODGRUPMAT = 72  -- Filtro por materia Ergonomía
+                AND C.N_CODGRUPMAT = 72
         ) b
         WHERE ORDENES_PROCEDEN = 'SI' AND CIERRE_MASIVO = 'NO' AND TRANSFERENCIA = 'NO'
         GROUP BY ORIGEN
         ORDER BY ORIGEN`;
-    return await executeQuery(sql);
+  return await executeQuerySIIT(sql);
 }
 
-// Tabla 2: Resultado
 async function obtenerTablaResultado() {
-    const sql = `
+  const sql = `
         SELECT 
             V_RESULTADO,
             SUM(CASE WHEN AÑO_CIERRE = '2016' THEN 1 ELSE 0 END) AS "2016",
@@ -311,17 +96,15 @@ async function obtenerTablaResultado() {
             FROM SIIT.VST_ORDENESINSPECCION A
             LEFT JOIN SIIT.VST_MATINSPECXOI C on (a.v_numordinsp=c.V_NUMORDINSP and a.v_anho=c.V_ANHO and a.n_numdep=c.N_NUMDEP)
             WHERE (A.D_FECCIERRE >= TO_DATE('01/01/2016','DD/MM/YYYY') AND A.D_FECCIERRE < SYSDATE)
-                AND C.N_CODGRUPMAT = 72  -- Filtro por materia Ergonomía
+                AND C.N_CODGRUPMAT = 72
         ) 
         GROUP BY V_RESULTADO
         ORDER BY V_RESULTADO`;
-    
-    return await executeQuery(sql);
+  return await executeQuerySIIT(sql);
 }
 
-// Función para obtener tabla de sector económico (limitada a top 10)
 async function obtenerTablaSector() {
-    const sql = `
+  const sql = `
         SELECT
             SECTOR_ECONOMICO,
             SUM(CASE WHEN AÑO_CIERRE = '2016' THEN 1 ELSE 0 END) AS "2016",
@@ -366,17 +149,15 @@ async function obtenerTablaSector() {
             FROM SIIT.VST_ORDENESINSPECCION A
             LEFT JOIN SIIT.VST_MATINSPECXOI C on (a.v_numordinsp=c.V_NUMORDINSP and a.v_anho=c.V_ANHO and a.n_numdep=c.N_NUMDEP)
             WHERE (A.D_FECCIERRE >= TO_DATE('01/01/2016','DD/MM/YYYY') AND A.D_FECCIERRE < SYSDATE)
-                AND C.N_CODGRUPMAT = 72  -- Filtro por materia Ergonomía
+                AND C.N_CODGRUPMAT = 72
         )
         GROUP BY SECTOR_ECONOMICO
         ORDER BY COUNT(*) DESC`;
-    
-    return await executeQuery(sql);
+  return await executeQuerySIIT(sql);
 }
 
-// Función para obtener tabla de región (limitada a top 15)
 async function obtenerTablaRegion() {
-    const sql = `
+  const sql = `
         SELECT
             REGION,
             SUM(CASE WHEN AÑO_CIERRE = '2016' THEN 1 ELSE 0 END) AS "2016",
@@ -464,69 +245,178 @@ async function obtenerTablaRegion() {
             FROM SIIT.VST_ORDENESINSPECCION A
             LEFT JOIN SIIT.VST_MATINSPECXOI C on (a.v_numordinsp=c.V_NUMORDINSP and a.v_anho=c.V_ANHO and a.n_numdep=c.N_NUMDEP)
             WHERE (A.D_FECCIERRE >= TO_DATE('01/01/2016','DD/MM/YYYY') AND A.D_FECCIERRE < SYSDATE)
-                AND C.N_CODGRUPMAT = 72  -- Filtro por materia Ergonomía
+                AND C.N_CODGRUPMAT = 72
         )
         GROUP BY REGION
         ORDER BY COUNT(*) DESC`;
-    
-    return await executeQuery(sql);
+  return await executeQuerySIIT(sql);
 }
 
-// Calcular resumen de los datos
+async function obtenerTablaResolucionesPrimeraInstanciaErgonomia() {
+  const sql = `
+        SELECT
+            'Resoluciones' AS Descripcion,
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2016' THEN 1 ELSE 0 END) AS "2016",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2017' THEN 1 ELSE 0 END) AS "2017",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2018' THEN 1 ELSE 0 END) AS "2018",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2019' THEN 1 ELSE 0 END) AS "2019",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2020' THEN 1 ELSE 0 END) AS "2020",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2021' THEN 1 ELSE 0 END) AS "2021",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2022' THEN 1 ELSE 0 END) AS "2022",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2023' THEN 1 ELSE 0 END) AS "2023",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2024' THEN 1 ELSE 0 END) AS "2024",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2025' THEN 1 ELSE 0 END) AS "2025",
+            COUNT(*) AS "Total"
+        FROM
+            SIIT.VST_EXPEDIENTE_RECURSO E
+        INNER JOIN SIIT.VST_MATXRSD D
+            ON E.V_ANHORES = D.V_ANHORES
+            AND E.N_NUMDEPDESRES = D.N_NUMDEPDESRES
+            AND E.V_NUMRES = D.V_NUMRES
+        WHERE
+            D.N_CODGRUPMAT = 72
+            AND D.N_CODSUBGRUPMAT IN (222, 999)
+            AND E.V_DESTIPRES NOT IN ('CONCESIÓN DE RECURSO', 'DENEGATORIA DE RECURSO', 'CORRECCION')
+            AND D.N_MONTOXMAT > 0
+            AND E.V_FLGANUL_RSD = 'N'
+        UNION ALL
+        SELECT
+            'Multas' AS Descripcion,
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2016' THEN D.N_MONTOXMAT ELSE 0 END) AS "2016",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2017' THEN D.N_MONTOXMAT ELSE 0 END) AS "2017",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2018' THEN D.N_MONTOXMAT ELSE 0 END) AS "2018",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2019' THEN D.N_MONTOXMAT ELSE 0 END) AS "2019",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2020' THEN D.N_MONTOXMAT ELSE 0 END) AS "2020",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2021' THEN D.N_MONTOXMAT ELSE 0 END) AS "2021",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2022' THEN D.N_MONTOXMAT ELSE 0 END) AS "2022",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2023' THEN D.N_MONTOXMAT ELSE 0 END) AS "2023",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2024' THEN D.N_MONTOXMAT ELSE 0 END) AS "2024",
+            SUM(CASE WHEN TO_CHAR(E.D_FECRES,'YYYY') = '2025' THEN D.N_MONTOXMAT ELSE 0 END) AS "2025",
+            SUM(D.N_MONTOXMAT) AS "Total"
+        FROM
+            SIIT.VST_EXPEDIENTE_RECURSO E
+        INNER JOIN SIIT.VST_MATXRSD D
+            ON E.V_ANHORES = D.V_ANHORES
+            AND E.N_NUMDEPDESRES = D.N_NUMDEPDESRES
+            AND E.V_NUMRES = D.V_NUMRES
+        WHERE
+            D.N_CODGRUPMAT = 72
+            AND D.N_CODSUBGRUPMAT IN (222, 999)
+            AND E.V_DESTIPRES NOT IN ('CONCESIÓN DE RECURSO', 'DENEGATORIA DE RECURSO', 'CORRECCION')
+            AND D.N_MONTOXMAT > 0
+            AND E.V_FLGANUL_RSD = 'N'
+            AND (E.D_FECRES >= TO_DATE('01/01/2016', 'DD/MM/YYYY') AND E.D_FECRES < SYSDATE)`;
+  return await executeQuerySIIT(sql);
+}
+
+async function obtenerTablaResolucionesSegundaInstanciaErgonomia() {
+  const sql = `
+        SELECT
+            'Resoluciones' AS Descripcion,
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2016' THEN 1 ELSE 0 END) AS "2016",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2017' THEN 1 ELSE 0 END) AS "2017",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2018' THEN 1 ELSE 0 END) AS "2018",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2019' THEN 1 ELSE 0 END) AS "2019",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2020' THEN 1 ELSE 0 END) AS "2020",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2021' THEN 1 ELSE 0 END) AS "2021",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2022' THEN 1 ELSE 0 END) AS "2022",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2023' THEN 1 ELSE 0 END) AS "2023",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2024' THEN 1 ELSE 0 END) AS "2024",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2025' THEN 1 ELSE 0 END) AS "2025",
+            COUNT(*) AS "Total"
+        FROM
+            SIIT.VST_EXPEDIENTE_RECURSO E
+        INNER JOIN SIIT.VST_MATXRD D
+            ON E.V_NUM_RD = D.V_NUM_RD
+            AND E.V_ANHO_RD = D.V_ANHO_RD
+            AND E.N_NUMDEP_RD = D.N_NUMDEP_RD
+        WHERE
+            D.N_CODGRUPMAT = 72
+            AND D.N_CODSUBGRUPMAT IN (222, 999)
+            AND E.V_DESTIP_RD NOT IN ('CONCESIÓN DE RECURSO', 'DENEGATORIA DE RECURSO', 'CORRECCION')
+            AND D.N_MONTOXMAT > 0
+            AND E.V_FLGANUL_RD = 'N'
+        UNION ALL
+        SELECT
+            'Multas' AS Descripcion,
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2016' THEN D.N_MONTOXMAT ELSE 0 END) AS "2016",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2017' THEN D.N_MONTOXMAT ELSE 0 END) AS "2017",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2018' THEN D.N_MONTOXMAT ELSE 0 END) AS "2018",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2019' THEN D.N_MONTOXMAT ELSE 0 END) AS "2019",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2020' THEN D.N_MONTOXMAT ELSE 0 END) AS "2020",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2021' THEN D.N_MONTOXMAT ELSE 0 END) AS "2021",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2022' THEN D.N_MONTOXMAT ELSE 0 END) AS "2022",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2023' THEN D.N_MONTOXMAT ELSE 0 END) AS "2023",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2024' THEN D.N_MONTOXMAT ELSE 0 END) AS "2024",
+            SUM(CASE WHEN TO_CHAR(E.D_FEC_RD,'YYYY') = '2025' THEN D.N_MONTOXMAT ELSE 0 END) AS "2025",
+            SUM(D.N_MONTOXMAT) AS "Total"
+        FROM
+            SIIT.VST_EXPEDIENTE_RECURSO E
+        INNER JOIN SIIT.VST_MATXRD D
+            ON E.V_NUM_RD = D.V_NUM_RD
+            AND E.V_ANHO_RD = D.V_ANHO_RD
+            AND E.N_NUMDEP_RD = D.N_NUMDEP_RD
+        WHERE
+            D.N_CODGRUPMAT = 72
+            AND D.N_CODSUBGRUPMAT IN (222, 999)
+            AND E.V_DESTIP_RD NOT IN ('CONCESIÓN DE RECURSO', 'DENEGATORIA DE RECURSO', 'CORRECCION')
+            AND D.N_MONTOXMAT > 0
+            AND E.V_FLGANUL_RD = 'N'
+            AND (E.D_FEC_RD >= TO_DATE('01/01/2016', 'DD/MM/YYYY') AND E.D_FEC_RD < SYSDATE)`;
+  return await executeQuerySIIT(sql);
+}
+
 function calcularResumen(datosTabla1, datosTabla2) {
-    let totalOrdenes = 0;
-    let denuncias = 0;
-    let operativos = 0;
-    let actasInfraccion = 0;
-    let informesInspeccion = 0;
-    let ordenes2025 = 0;
-    
-    // Calcular desde tabla 1 (origen)
-    if (datosTabla1 && datosTabla1.length > 0) {
-        datosTabla1.forEach(row => {
-            if (row.ORIGEN === 'DENUNCIA') {
-                denuncias = parseInt(row.Total) || 0;
-            } else if (row.ORIGEN === 'OPERATIVO') {
-                operativos = parseInt(row.Total) || 0;
-            }
-            ordenes2025 += parseInt(row["2025"]) || 0;
-        });
-        totalOrdenes = denuncias + operativos;
-    }
-    
-    // Calcular desde tabla 2 (resultado)
-    if (datosTabla2 && datosTabla2.length > 0) {
-        datosTabla2.forEach(row => {
-            if (row.V_RESULTADO === 'ACTA DE INFRACCION') {
-                actasInfraccion = parseInt(row.Total) || 0;
-            } else if (row.V_RESULTADO === 'INFORME DE INSPECCION') {
-                informesInspeccion = parseInt(row.Total) || 0;
-            }
-        });
-    }
-    
-    return {
-        totalOrdenes,
-        denuncias,
-        operativos,
-        actasInfraccion,
-        informesInspeccion,
-        ordenes2025
-    };
+  let totalOrdenes = 0, denuncias = 0, operativos = 0, actasInfraccion = 0, informesInspeccion = 0, ordenes2025 = 0;
+  if (datosTabla1 && datosTabla1.length > 0) {
+    datosTabla1.forEach(row => {
+      if (row.ORIGEN === 'DENUNCIA') denuncias = parseInt(row.Total) || 0;
+      else if (row.ORIGEN === 'OPERATIVO') operativos = parseInt(row.Total) || 0;
+      ordenes2025 += parseInt(row['2025']) || 0;
+    });
+    totalOrdenes = denuncias + operativos;
+  }
+  if (datosTabla2 && datosTabla2.length > 0) {
+    datosTabla2.forEach(row => {
+      if (row.V_RESULTADO === 'ACTA DE INFRACCION') actasInfraccion = parseInt(row.Total) || 0;
+      else if (row.V_RESULTADO === 'INFORME DE INSPECCION') informesInspeccion = parseInt(row.Total) || 0;
+    });
+  }
+  return { totalOrdenes, denuncias, operativos, actasInfraccion, informesInspeccion, ordenes2025 };
 }
 
-module.exports = { 
-    initializePool, 
-    executeQuery, 
-    getEmpresaDatosGenerales, 
-    getListaTrabajadoresUltimoPeriodo, 
-    getResumenTrabajadoresUltimoPeriodo, 
-    getTrabajadorDatos, 
-    getTrabajadorUltimaPlanilla,
-    generarReporteErgonomia,
-    obtenerTablaOrigen,
-    obtenerTablaResultado,
-    obtenerTablaSector,
-    obtenerTablaRegion,
-    calcularResumen
+async function generarReporteErgonomia() {
+  try {
+    console.log('🔄 Generando reporte de ergonomía...');
+    const datosTabla1 = await obtenerTablaOrigen();
+    const datosTabla2 = await obtenerTablaResultado();
+    const datosTabla3 = await obtenerTablaSector();
+    const datosTabla4 = await obtenerTablaRegion();
+    const datosTabla5 = await obtenerTablaResolucionesPrimeraInstanciaErgonomia();
+    const datosTabla6 = await obtenerTablaResolucionesSegundaInstanciaErgonomia();
+    const resumen = calcularResumen(datosTabla1, datosTabla2);
+    const pdfBuffer = await generarPDFReporteErgonomia({
+      titulo: 'AYUDA DE MEMORIA DEL SISTEMA DE INSPECCIÓN DEL TRABAJO EN: MATERIA: MATER-Ergonomía(72)',
+      tabla1: datosTabla1, tabla2: datosTabla2, tabla3: datosTabla3, tabla4: datosTabla4,
+      tabla5: datosTabla5, tabla6: datosTabla6, resumen
+    });
+    console.log('✅ Reporte de ergonomía generado exitosamente');
+    return pdfBuffer;
+  } catch (error) {
+    console.error('❌ Error generando reporte de ergonomía:', error);
+    throw error;
+  }
+}
+
+module.exports = {
+  obtenerTablaOrigen,
+  obtenerTablaResultado,
+  obtenerTablaSector,
+  obtenerTablaRegion,
+  obtenerTablaResolucionesPrimeraInstanciaErgonomia,
+  obtenerTablaResolucionesSegundaInstanciaErgonomia,
+  calcularResumen,
+  generarReporteErgonomia,
 };
+
+

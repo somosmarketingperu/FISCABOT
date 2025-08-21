@@ -2,9 +2,15 @@ const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@
 const QRPortalWeb = require('@bot-whatsapp/portal');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const MockAdapter = require('@bot-whatsapp/database/mock');
-const { initializePool, getEmpresaDatosGenerales, getEmpresaContacto, getEmpresaUbicacion, getEmpresaTRegistroPlame, getTrabajadorDatos, getTrabajadorUltimaPlanilla, getEmpresaInfoCompleta, getListaTrabajadoresUltimoPeriodo, getResumenTrabajadoresUltimoPeriodo, generarReporteErgonomia } = require('./database');
-const { generateEmployerReportPDF } = require('./pdfGenerator');
+const { initializePool } = require('./db/connection');
+const { getEmpresaDatosGenerales, getEmpresaContacto, getEmpresaUbicacion, getEmpresaTRegistroPlame, getEmpresaInfoCompleta, getListaTrabajadoresUltimoPeriodo, getResumenTrabajadoresUltimoPeriodo } = require('./db/employer');
+const { getTrabajadorDatos, getTrabajadorUltimaPlanilla } = require('./db/trabajador');
+const { generarReporteErgonomia } = require('./db/ergonomia');
+const { generarReporteSector } = require('./db/sector');
+const { generateEmployerReportPDF } = require('./reports/employerReport');
+const { generateTrabajadorReportPDF } = require('./reports/trabajadorReport');
 const path = require('path');
+const fs = require('fs');
 
 const logCtx = (ctx, extra = '') => {
     console.log('--- LOG CONTEXTO ---');
@@ -127,14 +133,23 @@ const flowCerrarSesion = addKeyword(EVENTS.ACTION)
 
 // FLUJO RUC (Consultar empresa por RUC)
 const flowRUC = addKeyword(EVENTS.ACTION)
-    .addAnswer('Por favor, escribe el número de RUC de la empresa (11 dígitos) que deseas consultar:',
+    .addAnswer('Por favor, escribe el número de RUC de la empresa (11 dígitos) que deseas consultar:\n\nO escribe "menu" para volver al menú principal.',
         { capture: true },
-        async (ctx, { flowDynamic, fallBack, state, provider }) => {
-            logCtx(ctx, 'Ingreso RUC');
-            const ruc = ctx.body.trim();
-            if (!/^20\d{9}$/.test(ruc)) {
-                return fallBack('El RUC ingresado no es válido. Debe tener 11 dígitos y empezar con 20.');
+        async (ctx, { flowDynamic, fallBack, state, provider, gotoFlow }) => {
+            const input = ctx.body.trim();
+            
+            // Verificar si quiere volver al menú
+            if (input.toLowerCase() === 'menu' || input.toLowerCase() === 'menú') {
+                return gotoFlow(flowMenuPrincipal);
             }
+            
+            // Validar RUC
+            if (!/^20\d{9}$/.test(input)) {
+                return fallBack('El RUC ingresado no es válido. Debe tener 11 dígitos y empezar con 20.\n\nO escribe "menu" para volver al menú principal.');
+            }
+            
+            logCtx(ctx, 'Ingreso RUC');
+            const ruc = input;
             await state.update({ ruc_consulta: ruc });
             let responded = false;
             const timer = setTimeout(async () => {
@@ -151,7 +166,11 @@ const flowRUC = addKeyword(EVENTS.ACTION)
                 ]);
                 responded = true;
                 clearTimeout(timer);
-                if (!datosEmpresaArr || datosEmpresaArr.length === 0) return fallBack('No se encontraron datos para ese RUC.');
+                if (!datosEmpresaArr || datosEmpresaArr.length === 0) {
+                    await flowDynamic('❌ No se encontraron datos para ese RUC.');
+                    await flowDynamic('Por favor, intenta con otro número de RUC o verifica que el número sea correcto.');
+                    return gotoFlow(flowRUC);
+                }
                 const datosEmpresa = datosEmpresaArr[0];
                 // Generar el PDF
                 const rutaPDF = generateEmployerReportPDF(datosEmpresa, listaTrabajadores, resumenTrabajadores, ruc);
@@ -163,16 +182,97 @@ const flowRUC = addKeyword(EVENTS.ACTION)
                 }
                 console.log('jid usado para enviar:', jid);
                 if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
-                    await provider.sendMedia(jid, rutaPDF);
+                    const hoy = new Date();
+                    const dd = String(hoy.getDate()).padStart(2, '0');
+                    const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const yyyy = hoy.getFullYear();
+                    const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                    const tituloEmp = `Reporte integral del empleador - RUC ${ruc} - Generado el ${fechaEtiqueta}`;
+                    const baseName = path.basename(rutaPDF);
+                    await provider.sendMedia(jid, rutaPDF, { caption: tituloEmp, fileName: baseName, mimetype: 'application/pdf' });
+                    await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
                 } else {
                     await flowDynamic('No se pudo enviar el PDF porque el número de destino no es válido. Valor de jid: ' + jid);
                 }
+                // Ir al flujo post-RUC para capturar la respuesta
+                return gotoFlow(flowPostRUC);
             } catch (err) {
                 responded = true;
                 clearTimeout(timer);
                 console.error('Error en consulta integral de empresa:', err);
                 return fallBack('Ocurrió un error al consultar la información de la empresa. Intente nuevamente.');
             }
+        }
+    );
+
+// FLUJO POST-RUC (para manejar la respuesta después del reporte)
+const flowPostRUC = addKeyword(EVENTS.ACTION)
+    .addAnswer('¿Deseas consultar otro RUC o volver al menú principal? Escribe "menu" para regresar o envía otro RUC (11 dígitos).',
+        { capture: true },
+        async (ctx, { gotoFlow, fallBack, state, flowDynamic, provider }) => {
+            const input = ctx.body.trim();
+            const lower = input.toLowerCase();
+            
+            if (lower === 'menu' || lower === 'menú') {
+                return gotoFlow(flowMenuPrincipal);
+            }
+            
+            if (/^20\d{9}$/.test(input)) {
+                // Procesar el nuevo RUC directamente aquí
+                const ruc = input;
+                await state.update({ ruc_consulta: ruc });
+                
+                await flowDynamic('🔄 Procesando nuevo RUC...');
+                
+                try {
+                    // Ejecutar los 3 queries en paralelo
+                    const [datosEmpresaArr, listaTrabajadores, resumenTrabajadores] = await Promise.all([
+                        getEmpresaDatosGenerales(ruc),
+                        getListaTrabajadoresUltimoPeriodo(ruc),
+                        getResumenTrabajadoresUltimoPeriodo(ruc)
+                    ]);
+                    
+                    if (!datosEmpresaArr || datosEmpresaArr.length === 0) {
+                        await flowDynamic('❌ No se encontraron datos para ese RUC.');
+                        await flowDynamic('Por favor, intenta con otro número de RUC o verifica que el número sea correcto.');
+                        return gotoFlow(flowPostRUC);
+                    }
+                    
+                    const datosEmpresa = datosEmpresaArr[0];
+                    
+                    // Generar el PDF
+                    const rutaPDF = generateEmployerReportPDF(datosEmpresa, listaTrabajadores, resumenTrabajadores, ruc);
+                    await flowDynamic('✅ Consulta realizada con éxito. El reporte integral en PDF ha sido generado. Enviando el archivo...');
+                    
+                    // Enviar el PDF
+                    let jid = ctx.from;
+                    if (typeof jid === 'string' && !jid.endsWith('@s.whatsapp.net')) {
+                        jid = jid.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    }
+                    
+                    if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
+                        const hoy = new Date();
+                        const dd = String(hoy.getDate()).padStart(2, '0');
+                        const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                        const yyyy = hoy.getFullYear();
+                        const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                        const tituloEmp = `Reporte integral del empleador - RUC ${ruc} - Generado el ${fechaEtiqueta}`;
+                        const baseName = path.basename(rutaPDF);
+                        await provider.sendMedia(jid, rutaPDF, { caption: tituloEmp, fileName: baseName, mimetype: 'application/pdf' });
+                        await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
+                    }
+                    
+                    // Volver a preguntar qué hacer
+                    return gotoFlow(flowPostRUC);
+                    
+                } catch (err) {
+                    console.error('Error en consulta de nuevo RUC:', err);
+                    await flowDynamic('❌ Ocurrió un error al consultar la información de la empresa. Intente nuevamente.');
+                    return gotoFlow(flowPostRUC);
+                }
+            }
+            
+            return fallBack('Por favor, escribe "menu" para ir al menú principal o envía otro RUC válido (11 dígitos y empieza con 20).');
         }
     );
 
@@ -281,44 +381,150 @@ const flowSubmenuEmpresa = addKeyword(EVENTS.ACTION)
 
 // FLUJO TRABAJADOR (Consultar trabajador por DNI)
 const flowTrabajador = addKeyword(EVENTS.ACTION)
-    .addAnswer('Por favor, escribe el número de DNI del trabajador que deseas consultar:',
+    .addAnswer('Por favor, escribe el número de DNI del trabajador que deseas consultar:\n\nO escribe "menu" para volver al menú principal.',
         { capture: true },
-        async (ctx, { flowDynamic, gotoFlow, fallBack, state }) => {
-            logCtx(ctx, 'Ingreso DNI trabajador');
-            const dni = ctx.body.trim();
-            console.log('DNI recibido:', dni);
-            if (!/^\d{8}$/.test(dni)) {
-                console.log('DNI inválido:', dni);
-                return fallBack('El DNI ingresado no es válido. Debe tener 8 dígitos.');
+        async (ctx, { flowDynamic, gotoFlow, fallBack, state, provider }) => {
+            const input = ctx.body.trim();
+            
+            // Verificar si quiere volver al menú
+            if (input.toLowerCase() === 'menu' || input.toLowerCase() === 'menú') {
+                return gotoFlow(flowMenuPrincipal);
             }
+            
+            // Validar DNI
+            if (!/^\d{8}$/.test(input)) {
+                console.log('DNI inválido:', input);
+                return fallBack('El DNI ingresado no es válido. Debe tener 8 dígitos.\n\nO escribe "menu" para volver al menú principal.');
+            }
+            
+            logCtx(ctx, 'Ingreso DNI trabajador');
+            const dni = input;
+            console.log('DNI recibido:', dni);
             await state.update({ dni_consulta: dni });
+            let responded = false;
+            const timer = setTimeout(async () => {
+                if (!responded) {
+                    await flowDynamic('⏳ La consulta está tomando más tiempo de lo habitual. Por favor, espere un momento mientras obtenemos la información...');
+                }
+            }, 10000);
+            try {
             console.log('Llamando a getTrabajadorDatos con DNI:', dni);
             const datos = await getTrabajadorDatos(dni);
             console.log('Datos recibidos de getTrabajadorDatos:', datos);
-            if (!datos) return fallBack('No se encontraron datos para ese DNI.');
+                responded = true;
+                clearTimeout(timer);
+                if (!datos) {
+                    await flowDynamic('❌ No se encontraron datos para ese DNI.');
+                    await flowDynamic('Por favor, intenta con otro número de DNI o verifica que el número sea correcto.');
+                    return gotoFlow(flowTrabajador);
+                }
             console.log('Llamando a getTrabajadorUltimaPlanilla con DNI:', dni);
             const plame = await getTrabajadorUltimaPlanilla(dni);
             console.log('Datos recibidos de getTrabajadorUltimaPlanilla:', plame);
-            let alerta = '';
-            if (datos.TIPO_TRABAJADOR && datos.TIPO_TRABAJADOR.toUpperCase().includes('OBRERO') && (!plame || plame.APORTE_ESSALUD < 1)) {
-                alerta = '🚨 ALERTA: El trabajador está registrado como "Obrero" pero no se encuentra registro de pago de SCTR en la última planilla. Se recomienda verificar.';
+                
+                // Generar el PDF
+                const rutaPDFTrab = generateTrabajadorReportPDF(datos, plame);
+                await flowDynamic('✅ Consulta realizada con éxito. El reporte integral en PDF ha sido generado. Enviando el archivo...');
+                
+                // Enviar el PDF como archivo adjunto por WhatsApp (asegurando JID válido)
+                let jid = ctx.from;
+                if (typeof jid === 'string' && !jid.endsWith('@s.whatsapp.net')) {
+                    jid = jid.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                }
+                console.log('jid usado para enviar:', jid);
+                if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
+                    const hoy = new Date();
+                    const dd = String(hoy.getDate()).padStart(2, '0');
+                    const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const yyyy = hoy.getFullYear();
+                    const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                    const tituloTrab = `Reporte del Trabajador - DNI ${dni} - Generado el ${fechaEtiqueta}`;
+                    const baseName = path.basename(rutaPDFTrab);
+                    await provider.sendMedia(jid, rutaPDFTrab, { caption: tituloTrab, fileName: baseName, mimetype: 'application/pdf' });
+                    await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
+                } else {
+                    await flowDynamic('No se pudo enviar el PDF porque el número de destino no es válido. Valor de jid: ' + jid);
+                }
+                // Ir al flujo post-DNI para capturar la respuesta
+                return gotoFlow(flowPostDNI);
+            } catch (err) {
+                responded = true;
+                clearTimeout(timer);
+                console.error('Error en consulta integral de trabajador:', err);
+                return fallBack('Ocurrió un error al consultar la información del trabajador. Intente nuevamente.');
             }
-            await flowDynamic(`Consulta para DNI: ${dni} - ${datos.NOMBRE_TRABAJADOR}\nEmpleador Actual: ${datos.RAZON_SOCIAL} (RUC: ${datos.RUC})\nVínculo Laboral (T-Registro):\nAño: ${datos.AÑO}\nTipo Contrato: ${datos.TIPO_TRABAJADOR}\nRemuneración Abril: S/ ${datos.ABRIL || '0.00'}\n\nÚltima Planilla (PLAME - ${plame?.V_PERDECLA || 'No disponible'}):\nDías Laborados: ${plame?.N_NUMEFELAB || 'No disponible'}\nMonto Neto Pagado: S/ ${plame?.N_MTOTOTPAG || 'No disponible'}\nAporte EsSalud: S/ ${plame?.APORTE_ESSALUD || 'No disponible'}\n${alerta}`);
-            await flowDynamic('¿Deseas consultar otro trabajador o volver al menú principal? Escribe "volver" para regresar.');
         }
-    )
-    .addAnswer('', { capture: true }, async (ctx, { gotoFlow, fallBack }) => {
+    );
+
+// FLUJO POST-DNI (para manejar la respuesta después del reporte)
+const flowPostDNI = addKeyword(EVENTS.ACTION)
+    .addAnswer('¿Deseas consultar otro trabajador o volver al menú principal? Escribe "menu" para regresar o envía otro DNI (8 dígitos).',
+        { capture: true },
+        async (ctx, { gotoFlow, fallBack, state, flowDynamic, provider }) => {
         logCtx(ctx, 'Submenú trabajador');
-        if (ctx.body.trim().toLowerCase() === 'volver') {
-            return gotoFlow(flowMenuPrincipal);
-        } else {
-            return fallBack('Por favor, escribe "volver" para regresar al menú principal.');
+            const input = ctx.body.trim();
+            const lower = input.toLowerCase();
+            
+            if (lower === 'menu' || lower === 'menú') {
+                return gotoFlow(flowMenuPrincipal);
             }
-    });
+            
+            if (/^\d{8}$/.test(input)) {
+                // Procesar el nuevo DNI directamente aquí
+                const dni = input;
+                await state.update({ dni_consulta: dni });
+                
+                await flowDynamic('🔄 Procesando nuevo DNI...');
+                
+                try {
+                    const datos = await getTrabajadorDatos(dni);
+                    if (!datos) {
+                        await flowDynamic('❌ No se encontraron datos para ese DNI.');
+                        await flowDynamic('Por favor, intenta con otro número de DNI o verifica que el número sea correcto.');
+                        return gotoFlow(flowPostDNI);
+                    }
+                    
+                    const plame = await getTrabajadorUltimaPlanilla(dni);
+                    
+                    // Generar el PDF
+                    const rutaPDFTrab = generateTrabajadorReportPDF(datos, plame);
+                    await flowDynamic('✅ Consulta realizada con éxito. El reporte integral en PDF ha sido generado. Enviando el archivo...');
+                    
+                    // Enviar el PDF
+                    let jid = ctx.from;
+                    if (typeof jid === 'string' && !jid.endsWith('@s.whatsapp.net')) {
+                        jid = jid.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    }
+                    
+                    if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
+                        const hoy = new Date();
+                        const dd = String(hoy.getDate()).padStart(2, '0');
+                        const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                        const yyyy = hoy.getFullYear();
+                        const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                        const tituloTrab = `Reporte del Trabajador - DNI ${dni} - Generado el ${fechaEtiqueta}`;
+                        const baseName = path.basename(rutaPDFTrab);
+                        await provider.sendMedia(jid, rutaPDFTrab, { caption: tituloTrab, fileName: baseName, mimetype: 'application/pdf' });
+                        await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
+                    }
+                    
+                    // Volver a preguntar qué hacer
+                    return gotoFlow(flowPostDNI);
+                    
+                } catch (err) {
+                    console.error('Error en consulta de nuevo DNI:', err);
+                    await flowDynamic('❌ Ocurrió un error al consultar la información del trabajador. Intente nuevamente.');
+                    return gotoFlow(flowPostDNI);
+                }
+            }
+            
+            return fallBack('Por favor, escribe "menu" para regresar al menú principal o envía otro DNI válido (8 dígitos).');
+        }
+    );
 
 // FLUJO DE REPORTES
 const flowReportes = addKeyword(EVENTS.ACTION)
-    .addAnswer('📊 REPORTES DISPONIBLES\n\n1️⃣ Reporte de Ergonomía (Materia 72)\n2️⃣ [Otro reporte - por implementar]\n3️⃣ [Otro reporte - por implementar]\n🔙 Volver al menú principal\n\nElige una opción (1, 2, 3 o escribe "volver"):',
+    .addAnswer('📊 REPORTES DISPONIBLES\n\n1️⃣ Reporte de Ergonomía (Materia 72)\n2️⃣ Reporte por Sector (ej. Agricultura, Ganadería, Caza y Silvicultura)\n3️⃣ [Otro reporte - por implementar]\n\nEscribe "volver" para ver nuevamente esta lista o "menu" para ir al menú principal.\n\nElige una opción (1, 2, 3, "volver" o "menu"):',
         { capture: true },
         async (ctx, { gotoFlow, fallBack, flowDynamic, provider }) => {
             logCtx(ctx, 'Menú reportes');
@@ -333,7 +539,12 @@ const flowReportes = addKeyword(EVENTS.ACTION)
                     // Guardar el PDF temporalmente y enviarlo
                     const fs = require('fs');
                     const path = require('path');
-                    const tempFileName = `reporte_ergonomia_${Date.now()}.pdf`;
+                    const hoy = new Date();
+                    const dd = String(hoy.getDate()).padStart(2, '0');
+                    const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const yyyy = hoy.getFullYear();
+                    const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                    const tempFileName = `Reporte_Ergonomia_Materia_72_${dd}-${MM}-${yyyy}.pdf`;
                     const tempFilePath = path.join(__dirname, tempFileName);
                     
                     // Escribir el buffer a un archivo temporal
@@ -349,7 +560,9 @@ const flowReportes = addKeyword(EVENTS.ACTION)
                     console.log('jid usado para enviar reporte ergonomía:', jid);
                     
                     if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
-                        await provider.sendMedia(jid, tempFilePath);
+                        const tituloErgo = `Reporte de Ergonomía (Materia 72) - Generado el ${fechaEtiqueta}`;
+                        const ergoBase = path.basename(tempFilePath);
+                        await provider.sendMedia(jid, tempFilePath, { caption: tituloErgo, fileName: ergoBase, mimetype: 'application/pdf' });
                         
                         // Eliminar archivo temporal después de enviar
                         setTimeout(() => {
@@ -360,7 +573,7 @@ const flowReportes = addKeyword(EVENTS.ACTION)
                             }
                         }, 5000);
                         
-                        await flowDynamic('✅ Reporte enviado exitosamente.');
+                        await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
                     } else {
                         await flowDynamic('❌ No se pudo enviar el PDF porque el número de destino no es válido.');
                     }
@@ -370,14 +583,49 @@ const flowReportes = addKeyword(EVENTS.ACTION)
                     await flowDynamic('❌ Error generando el reporte. Por favor, inténtalo de nuevo.');
                 }
                 
-                await flowDynamic('¿Deseas generar otro reporte o volver al menú principal? Escribe "volver" para regresar.');
+                await flowDynamic('¿Deseas generar otro reporte o volver al menú principal? Escribe "volver" para ver la lista de reportes o "menu" para ir al menú principal.');
                 
-            } else if (opcion === '2' || opcion === '3') {
+            } else if (opcion === '2') {
+                // Reporte por Sector - por defecto V_CODSEC = 'A'
+                const codSec = 'A';
+                const sectorTitulo = 'AGRICULT., GANAD., CAZA Y SILVIC.';
+                await flowDynamic('🔄 Generando reporte por sector...');
+                try {
+                    const pdfBuffer = await generarReporteSector({ codSec, sectorTitulo });
+                    const fs = require('fs');
+                    const path = require('path');
+                    const hoy = new Date();
+                    const dd = String(hoy.getDate()).padStart(2, '0');
+                    const MM = String(hoy.getMonth() + 1).padStart(2, '0');
+                    const yyyy = hoy.getFullYear();
+                    const fechaEtiqueta = `${dd}/${MM}/${yyyy}`;
+                    const tempFileName = `Reporte_Sector_${codSec}_${dd}-${MM}-${yyyy}.pdf`;
+                    const tempFilePath = path.join(__dirname, tempFileName);
+                    fs.writeFileSync(tempFilePath, pdfBuffer);
+                    let jid = ctx.from;
+                    if (typeof jid === 'string' && !jid.endsWith('@s.whatsapp.net')) {
+                        jid = jid.replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    }
+                    if (typeof jid === 'string' && jid.endsWith('@s.whatsapp.net')) {
+                        const caption = `Reporte por Sector: ${sectorTitulo} - Generado el ${fechaEtiqueta}`;
+                        const sectorBase = path.basename(tempFilePath);
+                        await provider.sendMedia(jid, tempFilePath, { caption, fileName: sectorBase, mimetype: 'application/pdf' });
+                        await flowDynamic(`✅ Reporte enviado exitosamente. Fecha de generación: ${fechaEtiqueta}.`);
+                        setTimeout(() => { try { fs.unlinkSync(tempFilePath); } catch (_) {} }, 5000);
+                    }
+                } catch (e) {
+                    console.error('Error generando reporte sector:', e);
+                    await flowDynamic('❌ Error generando el reporte por sector.');
+                }
+                await flowDynamic('¿Deseas generar otro reporte o volver al menú principal? Escribe "volver" para ver la lista de reportes o "menu" para ir al menú principal.');
+            } else if (opcion === '3') {
                 return fallBack('Este reporte está por implementar. Por favor, elige otra opción.');
             } else if (opcion.toLowerCase() === 'volver') {
-                return gotoFlow(flowMenuPrincipal);
-            } else {
-                return fallBack('Opción no válida. Por favor, elige 1, 2, 3 o escribe "volver".');
+                return gotoFlow(flowReportes); // re-mostrar lista de reportes
+            } else if (opcion.toLowerCase() === 'menu' || opcion.toLowerCase() === 'menú') {
+            return gotoFlow(flowMenuPrincipal);
+        } else {
+                return fallBack('Opción no válida. Elige 1, 2, 3; escribe "volver" para ver la lista de reportes o "menu" para ir al menú principal.');
             }
         }
     );
@@ -479,8 +727,10 @@ const main = async () => {
         flowVolver,
         flowMenuPrincipal,
         flowRUC,
+        flowPostRUC, // Flujo para manejar respuesta post-RUC
         flowSubmenuEmpresa, // Added flowSubmenuEmpresa to the flow
         flowTrabajador,
+        flowPostDNI, // Flujo para manejar respuesta post-DNI
         flowReportes, // ← AGREGADO
         flowChecklists,
         flowNormativa,
